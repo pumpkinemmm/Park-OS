@@ -213,13 +213,143 @@ function aiQuery(text) {
 // ==================== 园区 2D 地图 ====================
 
 function renderMapPanel() {
-  const si = { good: '✅', warn: '🔶', danger: '🔴' }
-  return `<div class="zone-map">${store.env.map(e => `
-    <div class="zone-card zone-${e.status}" onclick="window.__showZoneDetail('${e.zone.replace(/'/g, "\\'")}')">
-      <div class="zone-card-status">${si[e.status] || '✅'}</div>
-      <div class="zone-card-name">${e.zone.split('·')[1] || e.zone}</div>
-      <div class="zone-card-metrics"><span>🌡 ${e.temp}°C</span><span>💧 ${e.humidity}%</span><span>🫁 ${e.pm25}</span><span>💨 ${e.co2}</span></div>
-    </div>`).join('')}</div>`
+  // 根据数据查找区域状态
+  const getStatus = (zoneKey) => {
+    const e = store.env.find(v => v.zone.includes(zoneKey))
+    return e ? e.status : 'good'
+  }
+  const getColor = (zoneKey) => {
+    const s = getStatus(zoneKey)
+    return s === 'danger' ? '#e57373' : s === 'warn' ? '#ffb74d' : '#4fc3f7'
+  }
+  const getPulse = (zoneKey) => getStatus(zoneKey) === 'danger' ? ' building-pulse' : ''
+
+  // 获取区域简称对应的数据
+  const zd = {}
+  store.env.forEach(e => {
+    const key = e.zone.split('·')[0]  // A区, B区, ...
+    zd[key] = e
+  })
+
+  // 生成楼宇 tooltip 文本
+  const tip = (key) => {
+    const d = zd[key]
+    if (!d) return key
+    return `${d.zone}\\n🌡 ${d.temp}°C  💧 ${d.humidity}%\\n🫁 PM2.5 ${d.pm25}  💨 CO₂ ${d.co2}`
+  }
+
+  return `
+  <svg class="campus-map" viewBox="0 0 800 460" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <filter id="glow"><feGaussianBlur stdDeviation="3" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+      <filter id="shadow"><feDropShadow dx="1" dy="2" stdDeviation="2" flood-opacity="0.3"/></filter>
+    </defs>
+
+    <!-- 背景草地 -->
+    <rect x="0" y="0" width="800" height="460" fill="#0a0f18" rx="12"/>
+    <rect x="10" y="10" width="780" height="440" fill="#141f2e" rx="10" stroke="#1e3040" stroke-width="1.5"/>
+
+    <!-- 绿化带 -->
+    <ellipse cx="130" cy="100" rx="60" ry="30" fill="#0f2a18" stroke="#1a4a28" stroke-width="0.8"/>
+    <ellipse cx="650" cy="380" rx="50" ry="25" fill="#0f2a18" stroke="#1a4a28" stroke-width="0.8"/>
+    <ellipse cx="400" cy="230" rx="35" ry="18" fill="#0f2a18" stroke="#1a4a28" stroke-width="0.8"/>
+    <ellipse cx="680" cy="100" rx="40" ry="20" fill="#0f2a18" stroke="#1a4a28" stroke-width="0.8"/>
+
+    <!-- 小树 -->
+    ${[[50,70],[90,120],[160,75],[620,90],[720,130],[700,360],[600,400],[80,370],[140,410],[350,50],[500,60],[550,400],[300,410]].map(([x,y]) => `<circle cx="${x}" cy="${y}" r="5" fill="#1a4a28"/><circle cx="${x}" cy="${y-2}" r="3" fill="#1d5a30"/>`).join('')}
+
+    <!-- 园区主路 -->
+    <rect x="10" y="215" width="780" height="30" fill="#1a2a35" stroke="#253545" stroke-width="0.5"/>
+    <line x1="10" y1="230" x2="790" y2="230" stroke="#2a4050" stroke-width="1" stroke-dasharray="16,8"/>
+    <!-- 纵向小路 -->
+    <rect x="260" y="30" width="22" height="430" fill="#1a2a35" stroke="#253545" stroke-width="0.5"/>
+    <rect x="520" y="30" width="22" height="430" fill="#1a2a35" stroke="#253545" stroke-width="0.5"/>
+
+    <!-- 大门 -->
+    <rect x="375" y="448" width="50" height="12" fill="#2a4a5c" rx="2"/>
+    <text x="400" y="458" text-anchor="middle" fill="#5a8da0" font-size="7">🚪 主入口</text>
+
+    <!-- ====== 楼宇 ====== -->
+
+    <!-- A区 办公楼主楼 (左上) -->
+    <g class="building${getPulse('A区')}" onclick="window.__showZoneDetail('${zd['A区']?.zone || 'A区·办公楼主楼'}')" style="cursor:pointer">
+      <rect x="40" y="35" width="130" height="55" rx="4" fill="${getColor('A区')}" opacity="0.55" stroke="${getColor('A区')}" stroke-width="3" filter="url(#shadow)"/>
+      <rect x="50" y="45" width="30" height="18" rx="2" fill="${getColor('A区')}" opacity="0.5"/>
+      <rect x="90" y="45" width="30" height="18" rx="2" fill="${getColor('A区')}" opacity="0.5"/>
+      <rect x="130" y="45" width="30" height="18" rx="2" fill="${getColor('A区')}" opacity="0.5"/>
+      <rect x="50" y="68" width="110" height="4" rx="1" fill="${getColor('A区')}" opacity="0.3"/>
+      <text x="105" y="108" text-anchor="middle" fill="#c8d6e5" font-size="10" font-weight="600">办公楼主楼</text>
+      <text x="105" y="120" text-anchor="middle" fill="#6b7d95" font-size="8">A 区</text>
+      ${zd['A区'] ? `<text x="105" y="135" text-anchor="middle" fill="${getColor('A区')}" font-size="8">🌡${zd['A区'].temp}°C  🫁${zd['A区'].pm25}</text>` : ''}
+    </g>
+
+    <!-- B区 研发中心 (中上) -->
+    <g class="building${getPulse('B区')}" onclick="window.__showZoneDetail('${zd['B区']?.zone || 'B区·研发中心'}')" style="cursor:pointer">
+      <rect x="300" y="30" width="120" height="65" rx="4" fill="${getColor('B区')}" opacity="0.55" stroke="${getColor('B区')}" stroke-width="3" filter="url(#shadow)"/>
+      <circle cx="340" cy="55" r="14" fill="${getColor('B区')}" opacity="0.4"/>
+      <rect x="365" y="46" width="45" height="8" rx="1" fill="${getColor('B区')}" opacity="0.45"/>
+      <rect x="365" y="58" width="45" height="8" rx="1" fill="${getColor('B区')}" opacity="0.55"/>
+      <rect x="365" y="70" width="45" height="8" rx="1" fill="${getColor('B区')}" opacity="0.3"/>
+      <text x="360" y="113" text-anchor="middle" fill="#c8d6e5" font-size="10" font-weight="600">研发中心</text>
+      <text x="360" y="125" text-anchor="middle" fill="#6b7d95" font-size="8">B 区</text>
+      ${zd['B区'] ? `<text x="360" y="140" text-anchor="middle" fill="${getColor('B区')}" font-size="8">🌡${zd['B区'].temp}°C  🫁${zd['B区'].pm25}</text>` : ''}
+    </g>
+
+    <!-- C区 生产厂房 (右上) -->
+    <g class="building${getPulse('C区')}" onclick="window.__showZoneDetail('${zd['C区']?.zone || 'C区·生产厂房'}')" style="cursor:pointer">
+      <rect x="560" y="25" width="200" height="70" rx="4" fill="${getColor('C区')}" opacity="0.55" stroke="${getColor('C区')}" stroke-width="3" filter="url(#shadow)"/>
+      <rect x="575" y="38" width="170" height="5" rx="1" fill="${getColor('C区')}" opacity="0.4"/>
+      <rect x="575" y="48" width="170" height="5" rx="1" fill="${getColor('C区')}" opacity="0.4"/>
+      <rect x="575" y="58" width="170" height="5" rx="1" fill="${getColor('C区')}" opacity="0.4"/>
+      <rect x="575" y="68" width="170" height="5" rx="1" fill="${getColor('C区')}" opacity="0.55"/>
+      <polygon points="620,38 625,18 630,38" fill="#ffb74d" opacity="0.6"/>
+      <text x="660" y="113" text-anchor="middle" fill="#c8d6e5" font-size="10" font-weight="600">生产厂房</text>
+      <text x="660" y="125" text-anchor="middle" fill="#6b7d95" font-size="8">C 区</text>
+      ${zd['C区'] ? `<text x="660" y="140" text-anchor="middle" fill="${getColor('C区')}" font-size="8">🌡${zd['C区'].temp}°C  🫁${zd['C区'].pm25}</text>` : ''}
+    </g>
+
+    <!-- D区 物流仓库 (右下) -->
+    <g class="building${getPulse('D区')}" onclick="window.__showZoneDetail('${zd['D区']?.zone || 'D区·物流仓库'}')" style="cursor:pointer">
+      <rect x="570" y="260" width="180" height="60" rx="4" fill="${getColor('D区')}" opacity="0.55" stroke="${getColor('D区')}" stroke-width="3" filter="url(#shadow)"/>
+      <rect x="585" y="275" width="150" height="30" rx="2" fill="${getColor('D区')}" opacity="0.55"/>
+      <line x1="600" y1="275" x2="600" y2="305" stroke="#0d1520" stroke-width="2"/>
+      <line x1="660" y1="275" x2="660" y2="305" stroke="#0d1520" stroke-width="2"/>
+      <text x="660" y="340" text-anchor="middle" fill="#c8d6e5" font-size="10" font-weight="600">物流仓库</text>
+      <text x="660" y="352" text-anchor="middle" fill="#6b7d95" font-size="8">D 区</text>
+      ${zd['D区'] ? `<text x="660" y="367" text-anchor="middle" fill="${getColor('D区')}" font-size="8">🌡${zd['D区'].temp}°C  🫁${zd['D区'].pm25}</text>` : ''}
+    </g>
+
+    <!-- E区 地下车库 (中下) -->
+    <g class="building${getPulse('E区')}" onclick="window.__showZoneDetail('${zd['E区']?.zone || 'E区·地下车库'}')" style="cursor:pointer">
+      <rect x="315" y="265" width="100" height="50" rx="4" fill="${getColor('E区')}" opacity="0.55" stroke="${getColor('E区')}" stroke-width="3" filter="url(#shadow)"/>
+      <rect x="328" y="278" width="74" height="24" rx="2" fill="${getColor('E区')}" opacity="0.55"/>
+      <text x="365" y="296" text-anchor="middle" fill="${getColor('E区')}" font-size="7">🚗 P</text>
+      <text x="365" y="335" text-anchor="middle" fill="#c8d6e5" font-size="10" font-weight="600">地下车库</text>
+      <text x="365" y="347" text-anchor="middle" fill="#6b7d95" font-size="8">E 区</text>
+      ${zd['E区'] ? `<text x="365" y="362" text-anchor="middle" fill="${getColor('E区')}" font-size="8">🌡${zd['E区'].temp}°C  🫁${zd['E区'].pm25}</text>` : ''}
+    </g>
+
+    <!-- F区 员工食堂 (左下) -->
+    <g class="building${getPulse('F区')}" onclick="window.__showZoneDetail('${zd['F区']?.zone || 'F区·员工食堂'}')" style="cursor:pointer">
+      <rect x="40" y="255" width="120" height="65" rx="4" fill="${getColor('F区')}" opacity="0.55" stroke="${getColor('F区')}" stroke-width="3" filter="url(#shadow)"/>
+      <rect x="55" y="270" width="40" height="18" rx="2" fill="${getColor('F区')}" opacity="0.4"/>
+      <rect x="105" y="270" width="40" height="18" rx="2" fill="${getColor('F区')}" opacity="0.55"/>
+      <rect x="55" y="293" width="90" height="5" rx="1" fill="${getColor('F区')}" opacity="0.3"/>
+      <text x="100" y="340" text-anchor="middle" fill="#c8d6e5" font-size="10" font-weight="600">员工食堂</text>
+      <text x="100" y="352" text-anchor="middle" fill="#6b7d95" font-size="8">F 区</text>
+      ${zd['F区'] ? `<text x="100" y="367" text-anchor="middle" fill="${getColor('F区')}" font-size="8">🌡${zd['F区'].temp}°C  🫁${zd['F区'].pm25}</text>` : ''}
+    </g>
+
+    <!-- 图例 -->
+    <g transform="translate(12, 400)">
+      <rect x="0" y="0" width="10" height="10" rx="2" fill="#4fc3f7" opacity="0.6"/>
+      <text x="14" y="9" fill="#6b7d95" font-size="8">正常</text>
+      <rect x="50" y="0" width="10" height="10" rx="2" fill="#ffb74d" opacity="0.6"/>
+      <text x="64" y="9" fill="#6b7d95" font-size="8">预警</text>
+      <rect x="100" y="0" width="10" height="10" rx="2" fill="#e57373" opacity="0.6"/>
+      <text x="114" y="9" fill="#6b7d95" font-size="8">危险</text>
+    </g>
+  </svg>`
 }
 
 function showZoneDetail(zoneName) {
@@ -274,21 +404,7 @@ function checkAlertBursts() {
   if (ka) ka.classList.toggle('kpi-pulse', store.alerts.filter(a => a.status === 'pending' && a.level === 'danger').length > 0)
 }
 
-// ==================== 智能缩放 ====================
 
-let scaleObserver = null
-function initAutoScale() {
-  const sc = document.querySelector('.dashboard-screen'); if (!sc) return
-  if (scaleObserver) scaleObserver.disconnect()
-  scaleObserver = new ResizeObserver(() => {
-    const p = sc.parentElement; if (!p) return
-    const s = Math.min(p.clientWidth / 1920, p.clientHeight / 1080, 1)
-    sc.style.transform = `scale(${s})`; sc.style.transformOrigin = 'top left'
-    sc.style.width = '1920px'; sc.style.height = '1080px'
-    sc.style.marginBottom = `${-(1080 - 1080 * s)}px`
-  })
-  scaleObserver.observe(sc.parentElement)
-}
 
 // ==================== AI 面板 ====================
 
@@ -331,7 +447,6 @@ function initDashboard() {
     renderPieChart('chartPie', store.deviceTypeStats)
     renderHeatmap('chartHeatmap', store.env)
     initAIPanel()
-    initAutoScale()
   })
 }
 
@@ -349,8 +464,6 @@ function refreshDashboard() {
 
 // ==================== 启动 ====================
 
-function tick() { $('#headerTime').textContent = new Date().toLocaleString('zh-CN', { hour12: false }) }
-tick(); setInterval(tick, 1000)
 window.addEventListener('resize', () => Object.values(chartInstances).forEach(c => c?.resize()))
 connectWebSocket()
 $('#dashboard').innerHTML = renderDashboard()

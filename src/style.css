@@ -18,7 +18,6 @@ body {
 }
 .logo { font-size: 15px; font-weight: 700; flex: 1; letter-spacing: -.2px; color: #c8d6e5; }
 .logo mark { background: none; color: #4fc3f7; font-weight: 800; }
-.header-time { font-size: 12px; color: #6b7d95; font-variant-numeric: tabular-nums; }
 
 /* === WebSocket 指示灯 === */
 .ws-indicator {
@@ -32,9 +31,12 @@ body {
 /* === 大屏容器 === */
 #dashboard {
   height: calc(100vh - 48px); overflow: hidden; position: relative;
+  width: 100%;
 }
 .dashboard-screen {
-  min-height: 100%; padding: 14px 18px; overflow: hidden;
+  padding: 14px 18px; overflow: hidden;
+  width: 100%; height: 100%;
+  display: flex; flex-direction: column;
 }
 
 /* === 趋势颜色 === */
@@ -157,27 +159,25 @@ body {
 .ai-panel-input button:hover { background: #22507f; }
 
 /* ================================================
-   园区 2D 地图
+   园区 SVG 2D 平面图
    ================================================ */
-.zone-map { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 6px; height: 100%; }
-.zone-card {
-  background: #0d1124; border: 2px solid #1a2040; border-radius: 8px;
-  padding: 8px 10px; cursor: pointer; transition: .2s;
-  display: flex; flex-direction: column; gap: 4px; position: relative;
+.campus-map {
+  width: 100%; height: 100%; display: block;
 }
-.zone-card:hover { border-color: #4fc3f7; box-shadow: 0 0 10px rgba(79,195,247,.1); transform: translateY(-1px); }
-.zone-good { border-color: #1a3a2a; }
-.zone-warn { border-color: #4a3a1a; }
-.zone-danger { border-color: #4a1a1a; animation: zone-pulse 2s infinite; }
-@keyframes zone-pulse {
-  0%, 100% { box-shadow: 0 0 0 rgba(229,115,115,0); }
-  50% { box-shadow: 0 0 10px rgba(229,115,115,.2); }
+.building {
+  transition: opacity .2s;
 }
-
-.zone-card-status { font-size: 13px; }
-.zone-card-name { font-size: 11px; font-weight: 600; color: #ccd6e8; }
-.zone-card-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 6px; }
-.zone-card-metrics span { font-size: 9px; color: #6b7d95; }
+.building:hover {
+  opacity: 0.85;
+  filter: url(#glow);
+}
+.building-pulse {
+  animation: build-pulse 2s infinite;
+}
+@keyframes build-pulse {
+  0%, 100% { filter: drop-shadow(0 0 2px rgba(229,115,115,0)); }
+  50% { filter: drop-shadow(0 0 10px rgba(229,115,115,.5)); }
+}
 
 /* ================================================
    区域钻取弹窗
@@ -304,7 +304,6 @@ body {
   .dashboard-right { width: 280px; }
   .chart-row:first-of-type { grid-template-columns: 1fr; }
   .map-heat-row { grid-template-columns: 1fr; }
-  .zone-map { grid-template-columns: repeat(2, 1fr); }
 }
 @media (max-width: 768px) {
   .kpi-row { grid-template-columns: 1fr 1fr; gap: 8px; }
