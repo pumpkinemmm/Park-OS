@@ -17,8 +17,6 @@ const ZONES = [
   'D区·物流仓库', 'E区·地下车库', 'F区·员工食堂',
 ]
 
-const DEVICE_TYPES = ['视频监控', '环境传感器', '门禁设备', '消防设备', '照明系统']
-
 // 每个区域的基础环境参数
 const zoneBase = {
   'A区·办公楼主楼': { temp: 24.0, humidity: 50, pm25: 16, co2: 450, energy: 120 },

@@ -1,16 +1,15 @@
 /* ================================================
-   智慧园区演示系统 — Park OS
-   多维监控大屏 + WebSocket 实时推送 + 智能故障诊断
+   Park OS — 智慧园区多维监控大屏
+   WebSocket 实时推送 + ECharts 图表 + AI 问答 + 声光告警
    ================================================ */
 
-// --- 工具 ---
 const $ = (s) => document.querySelector(s)
-const $$ = (s) => document.querySelectorAll(s)
 const fmt = (n) => n.toLocaleString('zh-CN')
 const pct = (a, b) => ((a / b) * 100).toFixed(1) + '%'
 
-// ==================== 全局数据存储 ====================
+// ==================== 数据存储 ====================
 
+const alertedIds = new Set()
 const store = {
   connected: false,
   stats: {
@@ -20,98 +19,22 @@ const store = {
     visitorsToday: 1847, visitorsYesterday: 2103,
     parkingTotal: 860, parkingUsed: 623,
   },
-  energyTrend: [
-    { time: '00:00', energy: 180, temp: 22.5, humidity: 55 },
-    { time: '02:00', energy: 150, temp: 22.0, humidity: 58 },
-    { time: '04:00', energy: 140, temp: 21.5, humidity: 60 },
-    { time: '06:00', energy: 220, temp: 22.8, humidity: 57 },
-    { time: '08:00', energy: 380, temp: 24.0, humidity: 52 },
-    { time: '10:00', energy: 410, temp: 24.8, humidity: 50 },
-    { time: '12:00', energy: 390, temp: 25.2, humidity: 48 },
-    { time: '14:00', energy: 420, temp: 25.5, humidity: 47 },
-    { time: '16:00', energy: 400, temp: 25.0, humidity: 49 },
-    { time: '18:00', energy: 350, temp: 24.2, humidity: 51 },
-    { time: '20:00', energy: 280, temp: 23.5, humidity: 53 },
-    { time: '22:00', energy: 210, temp: 22.8, humidity: 54 },
-  ],
-  env: [
-    { zone: 'A区·办公楼主楼', temp: 24.5, humidity: 52, pm25: 18, co2: 480, status: 'good' },
-    { zone: 'B区·研发中心', temp: 23.8, humidity: 48, pm25: 15, co2: 420, status: 'good' },
-    { zone: 'C区·生产厂房', temp: 28.2, humidity: 62, pm25: 45, co2: 680, status: 'warn' },
-    { zone: 'D区·物流仓库', temp: 26.0, humidity: 55, pm25: 32, co2: 520, status: 'good' },
-    { zone: 'E区·地下车库', temp: 22.1, humidity: 70, pm25: 28, co2: 850, status: 'warn' },
-    { zone: 'F区·员工食堂', temp: 25.6, humidity: 58, pm25: 22, co2: 550, status: 'good' },
-  ],
-  deviceTypeStats: [
-    { name: '视频监控', total: 320, online: 316 },
-    { name: '环境传感器', total: 186, online: 185 },
-    { name: '门禁设备', total: 48, online: 46 },
-    { name: '消防设备', total: 156, online: 152 },
-    { name: '照明系统', total: 576, online: 568 },
-  ],
-  alerts: [
-    { id: 1, time: '10:32:15', device: '烟感传感器 #A12', location: 'C区·3号厂房', level: 'danger', label: '紧急', status: 'pending', desc: '烟雾浓度超标 3.2 倍' },
-    { id: 2, time: '10:28:03', device: '水位监测 #B07', location: 'E区·地下车库B2', level: 'warn', label: '警告', status: 'pending', desc: '水位超过警戒线 15cm' },
-    { id: 3, time: '10:15:44', device: '门禁控制器 #D03', location: 'A区·西大门', level: 'info', label: '提示', status: 'resolved', desc: '非法卡刷卡 3 次后锁定' },
-    { id: 4, time: '09:58:21', device: '变压器 #T01', location: 'C区·配电房', level: 'warn', label: '警告', status: 'processing', desc: '三相电流不平衡 18%' },
-    { id: 5, time: '09:42:10', device: '消防泵 #P05', location: 'C区·消防站', level: 'danger', label: '紧急', status: 'processing', desc: '泵体压力异常下降' },
-    { id: 6, time: '09:20:33', device: '温湿度传感器 #H12', location: 'B区·数据中心', level: 'warn', label: '警告', status: 'resolved', desc: '温度超过 28°C 阈值' },
-    { id: 7, time: '08:55:07', device: '电梯监控 #E03', location: 'A区·办公楼主楼', level: 'info', label: '提示', status: 'resolved', desc: '3号梯停靠超时 60s' },
-    { id: 8, time: '08:30:52', device: '光伏逆变器 #S01', location: 'C区·屋顶光伏站', level: 'info', label: '提示', status: 'resolved', desc: '发电功率骤降 40%，疑似云层遮挡' },
-  ],
+  energyTrend: [],
+  env: [],
+  deviceTypeStats: [],
+  alerts: [],
   diagnosis: [],
-  // 静态数据（非大屏页使用）
-  devices: [
-    { id: 'CAM-001', name: '高清球机 #A01', type: '视频监控', location: 'A区·主入口', status: 'online', ip: '192.168.1.101', updated: '10:30:15' },
-    { id: 'CAM-002', name: '高清球机 #A02', type: '视频监控', location: 'A区·办公楼大堂', status: 'online', ip: '192.168.1.102', updated: '10:30:18' },
-    { id: 'SEN-001', name: '烟感传感器 #A12', type: '消防设备', location: 'C区·3号厂房', status: 'alarm', ip: '192.168.2.201', updated: '10:32:15' },
-    { id: 'SEN-002', name: '温湿度传感器 #H12', type: '环境传感器', location: 'B区·数据中心', status: 'online', ip: '192.168.2.202', updated: '10:28:00' },
-    { id: 'SEN-003', name: '水位监测 #B07', type: '环境传感器', location: 'E区·地下车库B2', status: 'alarm', ip: '192.168.2.203', updated: '10:28:03' },
-    { id: 'CTL-001', name: '门禁控制器 #D03', type: '门禁设备', location: 'A区·西大门', status: 'online', ip: '192.168.3.101', updated: '10:30:05' },
-    { id: 'CTL-002', name: '门禁控制器 #D05', type: '门禁设备', location: 'B区·东门', status: 'offline', ip: '192.168.3.102', updated: '09:15:33' },
-    { id: 'PWR-001', name: '变压器 #T01', type: '电力设备', location: 'C区·配电房', status: 'alarm', ip: '192.168.4.101', updated: '09:58:21' },
-    { id: 'PWR-002', name: '光伏逆变器 #S01', type: '电力设备', location: 'C区·屋顶光伏站', status: 'online', ip: '192.168.4.102', updated: '10:29:55' },
-    { id: 'FIRE-001', name: '消防泵 #P05', type: '消防设备', location: 'C区·消防站', status: 'alarm', ip: '192.168.5.101', updated: '09:42:10' },
-    { id: 'LIT-001', name: '智能路灯 #L22', type: '照明系统', location: '园区主干道·东段', status: 'online', ip: '192.168.6.201', updated: '10:31:02' },
-    { id: 'LIT-002', name: '智能路灯 #L45', type: '照明系统', location: '园区主干道·西段', status: 'offline', ip: '192.168.6.202', updated: '06:45:11' },
-  ],
-  parkingLots: [
-    { name: 'A区·地面停车场', total: 200, used: 156 },
-    { name: 'B区·地下车库B1', total: 300, used: 227 },
-    { name: 'B区·地下车库B2', total: 200, used: 143 },
-    { name: 'C区·货运停车场', total: 100, used: 62 },
-    { name: 'D区·访客停车场', total: 60, used: 35 },
-  ],
-  cameras: [
-    { id: 'CAM-01', name: '主入口', location: 'A区·大门' },
-    { id: 'CAM-02', name: '办公楼大堂', location: 'A区·1F' },
-    { id: 'CAM-03', name: '研发中心走廊', location: 'B区·3F' },
-    { id: 'CAM-04', name: '生产厂房入口', location: 'C区·东门' },
-    { id: 'CAM-05', name: '地下车库B1', location: 'E区·B1' },
-    { id: 'CAM-06', name: '园区主干道', location: '主干道·中段' },
-    { id: 'CAM-07', name: '员工食堂', location: 'F区·1F' },
-    { id: 'CAM-08', name: '物流仓库', location: 'D区·装卸区' },
-  ],
 }
 
 // ==================== WebSocket 客户端 ====================
 
-let ws = null
-let wsReconnectTimer = null
+let ws = null, wsReconnectTimer = null
 
 function connectWebSocket() {
   if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return
-
-  try {
-    ws = new WebSocket('ws://localhost:3001')
-  } catch (e) {
-    console.warn('WebSocket 连接创建失败:', e.message)
-    scheduleReconnect()
-    return
-  }
+  try { ws = new WebSocket('ws://localhost:3001') } catch (_) { scheduleReconnect(); return }
 
   ws.onopen = () => {
-    console.log('🔗 WebSocket 已连接')
     store.connected = true
     updateConnectionIndicator()
     if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null }
@@ -119,710 +42,316 @@ function connectWebSocket() {
 
   ws.onmessage = (event) => {
     try {
-      const payload = JSON.parse(event.data)
-      if (payload.type === 'iot_data') {
-        // 更新全局 store
-        if (payload.stats) store.stats = payload.stats
-        if (payload.energyTrend) store.energyTrend = payload.energyTrend
-        if (payload.env) store.env = payload.env
-        if (payload.deviceTypeStats) store.deviceTypeStats = payload.deviceTypeStats
-        if (payload.alerts) store.alerts = payload.alerts
-        if (payload.diagnosis) store.diagnosis = payload.diagnosis
-
-        // 刷新大屏（如果当前在 dashboard 页面）
-        if (activeTab === 'dashboard' && tabs.dashboard) {
-          refreshDashboardCharts()
-        }
-        updateAlertBadge()
-      }
-    } catch (e) {
-      console.error('WebSocket 消息解析失败:', e.message)
-    }
+      const d = JSON.parse(event.data)
+      if (d.type !== 'iot_data') return
+      if (d.stats) store.stats = d.stats
+      if (d.energyTrend) store.energyTrend = d.energyTrend
+      if (d.env) store.env = d.env
+      if (d.deviceTypeStats) store.deviceTypeStats = d.deviceTypeStats
+      if (d.alerts) store.alerts = d.alerts
+      if (d.diagnosis) store.diagnosis = d.diagnosis
+      refreshDashboard()
+    } catch (_) {}
   }
 
-  ws.onclose = () => {
-    console.log('🔌 WebSocket 已断开')
-    store.connected = false
-    updateConnectionIndicator()
-    scheduleReconnect()
-  }
-
-  ws.onerror = (err) => {
-    console.error('⚠️ WebSocket 错误:', err)
-  }
+  ws.onclose = () => { store.connected = false; updateConnectionIndicator(); scheduleReconnect() }
 }
 
 function scheduleReconnect() {
   if (wsReconnectTimer) return
-  wsReconnectTimer = setTimeout(() => {
-    wsReconnectTimer = null
-    console.log('🔄 尝试重连 WebSocket...')
-    connectWebSocket()
-  }, 5000)
+  wsReconnectTimer = setTimeout(() => { wsReconnectTimer = null; connectWebSocket() }, 5000)
 }
 
 function updateConnectionIndicator() {
   const el = $('#wsIndicator')
   if (!el) return
-  if (store.connected) {
-    el.className = 'ws-indicator ws-connected'
-    el.title = 'WebSocket 已连接 · 实时数据推送中'
-  } else {
-    el.className = 'ws-indicator ws-disconnected'
-    el.title = 'WebSocket 已断开 · 正在尝试重连'
-  }
+  el.className = store.connected ? 'ws-indicator ws-connected' : 'ws-indicator ws-disconnected'
+  el.title = store.connected ? 'WebSocket 已连接' : 'WebSocket 已断开'
 }
 
-// ==================== ECharts 图表管理 ====================
+// ==================== ECharts 图表 ====================
 
 const chartInstances = {}
-
-function getOrCreateChart(domId) {
-  if (chartInstances[domId]) return chartInstances[domId]
-  const dom = document.getElementById(domId)
+function getChart(id) {
+  if (chartInstances[id]) return chartInstances[id]
+  const dom = document.getElementById(id)
   if (!dom) return null
-  const chart = echarts.init(dom)
-  chartInstances[domId] = chart
-  return chart
+  return (chartInstances[id] = echarts.init(dom))
 }
-
-function disposeChart(domId) {
-  if (chartInstances[domId]) {
-    chartInstances[domId].dispose()
-    delete chartInstances[domId]
-  }
-}
-
 function disposeAllCharts() {
-  for (const key of Object.keys(chartInstances)) {
-    disposeChart(key)
-  }
+  Object.keys(chartInstances).forEach(k => { chartInstances[k]?.dispose(); delete chartInstances[k] })
 }
 
-/** 折线图：24h 能耗 + 温度 + 湿度 双 Y 轴趋势 */
 function renderLineChart(domId, data) {
-  const chart = getOrCreateChart(domId)
-  if (!chart) return
-
-  const times = data.map(d => d.time)
-  const energy = data.map(d => d.energy)
-  const temp = data.map(d => d.temp)
-  const humidity = data.map(d => d.humidity)
-
-  chart.setOption({
-    tooltip: {
-      trigger: 'axis',
-      backgroundColor: 'rgba(15,20,35,0.92)',
-      borderColor: '#1e3a5f',
-      textStyle: { color: '#c8d6e5', fontSize: 12 },
-    },
-    legend: {
-      data: ['能耗 (kWh)', '温度 (°C)', '湿度 (%)'],
-      bottom: 0,
-      textStyle: { color: '#8899aa', fontSize: 11 },
-      itemGap: 20,
-    },
+  const c = getChart(domId); if (!c || !data.length) return
+  c.setOption({
+    tooltip: { trigger: 'axis', backgroundColor: 'rgba(15,20,35,0.92)', borderColor: '#1e3a5f', textStyle: { color: '#c8d6e5', fontSize: 12 } },
+    legend: { data: ['能耗 (kWh)', '温度 (°C)', '湿度 (%)'], bottom: 0, textStyle: { color: '#8899aa', fontSize: 11 }, itemGap: 20 },
     grid: { left: 50, right: 55, top: 18, bottom: 38 },
-    xAxis: {
-      type: 'category',
-      data: times,
-      boundaryGap: false,
-      axisLine: { lineStyle: { color: '#2a3a5c' } },
-      axisTick: { show: false },
-      axisLabel: { color: '#6b7d95', fontSize: 10, rotate: times.length > 16 ? 45 : 0 },
-    },
+    xAxis: { type: 'category', data: data.map(d => d.time), boundaryGap: false, axisLine: { lineStyle: { color: '#2a3a5c' } }, axisTick: { show: false }, axisLabel: { color: '#6b7d95', fontSize: 10, rotate: data.length > 16 ? 45 : 0 } },
     yAxis: [
-      {
-        type: 'value',
-        name: 'kWh',
-        nameTextStyle: { color: '#6b7d95', fontSize: 10 },
-        axisLine: { show: false },
-        axisTick: { show: false },
-        splitLine: { lineStyle: { color: '#1a2a40', type: 'dashed' } },
-        axisLabel: { color: '#6b7d95', fontSize: 10 },
-      },
-      {
-        type: 'value',
-        name: '°C / %',
-        nameTextStyle: { color: '#6b7d95', fontSize: 10 },
-        axisLine: { show: false },
-        axisTick: { show: false },
-        splitLine: { show: false },
-        axisLabel: { color: '#6b7d95', fontSize: 10 },
-      },
+      { type: 'value', name: 'kWh', nameTextStyle: { color: '#6b7d95', fontSize: 10 }, splitLine: { lineStyle: { color: '#1a2a40', type: 'dashed' } }, axisLabel: { color: '#6b7d95', fontSize: 10 } },
+      { type: 'value', name: '°C / %', nameTextStyle: { color: '#6b7d95', fontSize: 10 }, splitLine: { show: false }, axisLabel: { color: '#6b7d95', fontSize: 10 } },
     ],
     series: [
-      {
-        name: '能耗 (kWh)',
-        type: 'line',
-        data: energy,
-        smooth: true,
-        symbol: 'none',
-        lineStyle: { width: 2.5, color: '#4fc3f7' },
-        areaStyle: {
-          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: 'rgba(79,195,247,0.25)' },
-            { offset: 1, color: 'rgba(79,195,247,0.02)' },
-          ]),
-        },
-      },
-      {
-        name: '温度 (°C)',
-        type: 'line',
-        yAxisIndex: 1,
-        data: temp,
-        smooth: true,
-        symbol: 'none',
-        lineStyle: { width: 2, color: '#ff8a65' },
-      },
-      {
-        name: '湿度 (%)',
-        type: 'line',
-        yAxisIndex: 1,
-        data: humidity,
-        smooth: true,
-        symbol: 'none',
-        lineStyle: { width: 2, color: '#81c784' },
-      },
+      { name: '能耗 (kWh)', type: 'line', data: data.map(d => d.energy), smooth: true, symbol: 'none', lineStyle: { width: 2.5, color: '#4fc3f7' }, areaStyle: { color: new echarts.graphic.LinearGradient(0,0,0,1,[{offset:0,color:'rgba(79,195,247,0.25)'},{offset:1,color:'rgba(79,195,247,0.02)'}]) } },
+      { name: '温度 (°C)', type: 'line', yAxisIndex: 1, data: data.map(d => d.temp), smooth: true, symbol: 'none', lineStyle: { width: 2, color: '#ff8a65' } },
+      { name: '湿度 (%)', type: 'line', yAxisIndex: 1, data: data.map(d => d.humidity), smooth: true, symbol: 'none', lineStyle: { width: 2, color: '#81c784' } },
     ],
-  }, true) // notMerge=true 确保数据完全替换
-}
-
-/** 饼图：设备类型占比 */
-function renderPieChart(domId, data) {
-  const chart = getOrCreateChart(domId)
-  if (!chart) return
-
-  const colors = ['#4fc3f7', '#81c784', '#ffb74d', '#e57373', '#ba68c8']
-
-  chart.setOption({
-    tooltip: {
-      trigger: 'item',
-      backgroundColor: 'rgba(15,20,35,0.92)',
-      borderColor: '#1e3a5f',
-      textStyle: { color: '#c8d6e5', fontSize: 12 },
-      formatter: '{b}: {c} 台 ({d}%)',
-    },
-    legend: {
-      orient: 'vertical',
-      right: 10,
-      top: 'center',
-      textStyle: { color: '#8899aa', fontSize: 11 },
-      itemGap: 12,
-    },
-    series: [{
-      type: 'pie',
-      radius: ['52%', '78%'],
-      center: ['38%', '50%'],
-      avoidLabelOverlap: false,
-      itemStyle: { borderRadius: 3, borderColor: '#0f1629', borderWidth: 3 },
-      label: {
-        show: true,
-        position: 'inside',
-        formatter: '{d}%',
-        fontSize: 11,
-        color: '#fff',
-      },
-      emphasis: {
-        label: { fontSize: 16, fontWeight: 'bold' },
-        scaleSize: 8,
-      },
-      data: data.map((d, i) => ({
-        value: d.total,
-        name: d.name,
-        itemStyle: { color: colors[i % colors.length] },
-      })),
-    }],
   }, true)
 }
 
-/** 热力图：园区各区域 × 环境指标空间密度 */
-function renderHeatmap(domId, envData) {
-  const chart = getOrCreateChart(domId)
-  if (!chart) return
+function renderPieChart(domId, data) {
+  const c = getChart(domId); if (!c || !data.length) return
+  c.setOption({
+    tooltip: { trigger: 'item', backgroundColor: 'rgba(15,20,35,0.92)', borderColor: '#1e3a5f', textStyle: { color: '#c8d6e5', fontSize: 12 }, formatter: '{b}: {c} 台 ({d}%)' },
+    legend: { orient: 'vertical', right: 10, top: 'center', textStyle: { color: '#8899aa', fontSize: 11 }, itemGap: 12 },
+    series: [{ type: 'pie', radius: ['52%', '78%'], center: ['38%', '50%'], itemStyle: { borderRadius: 3, borderColor: '#0f1629', borderWidth: 3 }, label: { show: true, position: 'inside', formatter: '{d}%', fontSize: 11, color: '#fff' }, emphasis: { label: { fontSize: 16, fontWeight: 'bold' }, scaleSize: 8 },
+      data: data.map((d, i) => ({ value: d.total, name: d.name, itemStyle: { color: ['#4fc3f7','#81c784','#ffb74d','#e57373','#ba68c8'][i % 5] } })) }],
+  }, true)
+}
 
+function renderHeatmap(domId, envData) {
+  const c = getChart(domId); if (!c || !envData.length) return
   const metrics = ['PM2.5', 'CO₂', '温度', '湿度']
   const zones = envData.map(e => e.zone.split('·')[1] || e.zone)
-
-  // 构建热力数据：[zoneIdx, metricIdx, value]
-  const heatData = []
-  envData.forEach((e, zi) => {
-    heatData.push([zi, 0, e.pm25])
-    heatData.push([zi, 1, e.co2])
-    heatData.push([zi, 2, e.temp])
-    heatData.push([zi, 3, e.humidity])
-  })
-
-  // 各指标的最大值用于归一化
-  const maxPM25 = Math.max(...envData.map(e => e.pm25), 1)
-  const maxCO2 = Math.max(...envData.map(e => e.co2), 1)
-  const maxTemp = Math.max(...envData.map(e => e.temp), 1)
-  const maxHumidity = Math.max(...envData.map(e => e.humidity), 1)
-
-  // 归一化到 0-100
-  const normalized = heatData.map(([zi, mi, val]) => {
-    const maxes = [maxPM25, maxCO2, maxTemp, maxHumidity]
-    return [zi, mi, Math.round(val / maxes[mi] * 100)]
-  })
-
-  chart.setOption({
-    tooltip: {
-      backgroundColor: 'rgba(15,20,35,0.92)',
-      borderColor: '#1e3a5f',
-      textStyle: { color: '#c8d6e5', fontSize: 12 },
-      formatter: (p) => {
-        const raw = heatData.find(d => d[0] === p.data[0] && d[1] === p.data[1])
-        const units = ['μg/m³', 'ppm', '°C', '%']
-        return `${zones[p.data[0]]}<br/>${metrics[p.data[1]]}: <b>${raw ? raw[2] : '--'} ${units[p.data[1]]}</b>`
-      },
-    },
+  const heatData = []; envData.forEach((e, zi) => { heatData.push([zi, 0, e.pm25], [zi, 1, e.co2], [zi, 2, e.temp], [zi, 3, e.humidity]) })
+  const maxes = [Math.max(...envData.map(e => e.pm25), 1), Math.max(...envData.map(e => e.co2), 1), Math.max(...envData.map(e => e.temp), 1), Math.max(...envData.map(e => e.humidity), 1)]
+  const normalized = heatData.map(([zi, mi, val]) => [zi, mi, Math.round(val / maxes[mi] * 100)])
+  c.setOption({
+    tooltip: { backgroundColor: 'rgba(15,20,35,0.92)', borderColor: '#1e3a5f', textStyle: { color: '#c8d6e5', fontSize: 12 }, formatter: (p) => { const r = heatData.find(d => d[0]===p.data[0] && d[1]===p.data[1]); return `${zones[p.data[0]]}<br/>${metrics[p.data[1]]}: <b>${r?r[2]:'--'} ${['μg/m³','ppm','°C','%'][p.data[1]]}</b>` } },
     grid: { left: 90, right: 40, top: 10, bottom: 30 },
-    xAxis: {
-      type: 'category',
-      data: zones,
-      position: 'bottom',
-      axisLine: { lineStyle: { color: '#2a3a5c' } },
-      axisTick: { show: false },
-      axisLabel: { color: '#8899aa', fontSize: 10, rotate: 20 },
-    },
-    yAxis: {
-      type: 'category',
-      data: metrics,
-      axisLine: { lineStyle: { color: '#2a3a5c' } },
-      axisTick: { show: false },
-      axisLabel: { color: '#8899aa', fontSize: 10 },
-    },
-    visualMap: {
-      min: 0,
-      max: 100,
-      calculable: true,
-      orient: 'vertical',
-      right: 0,
-      top: 'center',
-      textStyle: { color: '#6b7d95', fontSize: 10 },
-      inRange: {
-        color: ['#0a1628', '#0d3b66', '#1a6b9e', '#28aae1', '#4fc3f7', '#81d4fa'],
-      },
-    },
-    series: [{
-      type: 'heatmap',
-      data: normalized,
-      label: { show: false },
-      emphasis: {
-        itemStyle: { shadowBlur: 10, shadowColor: 'rgba(79,195,247,0.6)' },
-      },
-    }],
+    xAxis: { type: 'category', data: zones, axisLine: { lineStyle: { color: '#2a3a5c' } }, axisLabel: { color: '#8899aa', fontSize: 10, rotate: 20 } },
+    yAxis: { type: 'category', data: metrics, axisLine: { lineStyle: { color: '#2a3a5c' } }, axisLabel: { color: '#8899aa', fontSize: 10 } },
+    visualMap: { min: 0, max: 100, orient: 'vertical', right: 0, top: 'center', textStyle: { color: '#6b7d95', fontSize: 10 }, inRange: { color: ['#0a1628','#0d3b66','#1a6b9e','#28aae1','#4fc3f7','#81d4fa'] } },
+    series: [{ type: 'heatmap', data: normalized, label: { show: false }, emphasis: { itemStyle: { shadowBlur: 10, shadowColor: 'rgba(79,195,247,0.6)' } } }],
   }, true)
 }
 
-/** 刷新大屏图表（WebSocket 数据更新时调用） */
-function refreshDashboardCharts() {
-  renderLineChart('chartLine', store.energyTrend)
-  renderPieChart('chartPie', store.deviceTypeStats)
-  renderHeatmap('chartHeatmap', store.env)
-
-  // 刷新 KPI 卡片
-  const kpiEl = $('#kpiRow')
-  if (kpiEl) kpiEl.innerHTML = renderKpiCards()
-
-  // 刷新诊断面板
-  const diagEl = $('#diagnosisPanel')
-  if (diagEl) diagEl.innerHTML = renderDiagnosisPanel()
-}
-
-// ==================== 大屏渲染组件 ====================
+// ==================== KPI 卡片 ====================
 
 function renderKpiCards() {
   const s = store.stats
-  const onlineRate = pct(s.online, s.devices)
-  const alertRemain = s.alertsToday - s.alertsResolved
-  const visitorChange = s.visitorsYesterday > 0
-    ? ((s.visitorsToday - s.visitorsYesterday) / s.visitorsYesterday * 100).toFixed(1)
-    : '0'
-  const visitorTrend = +visitorChange >= 0 ? '▲' : '▼'
-  const visitorCls = +visitorChange >= 0 ? 'trend-up' : 'trend-down'
-
+  const vc = s.visitorsYesterday > 0 ? ((s.visitorsToday - s.visitorsYesterday) / s.visitorsYesterday * 100).toFixed(1) : '0'
+  const vt = +vc >= 0 ? '▲' : '▼', vcls = +vc >= 0 ? 'trend-up' : 'trend-down'
+  const ar = s.alertsToday - s.alertsResolved
   return `
-    <div class="kpi-card">
-      <div class="kpi-icon" style="background:rgba(79,195,247,.15);color:#4fc3f7">📡</div>
-      <div class="kpi-body">
-        <div class="kpi-label">设备总数 / 在线率</div>
-        <div class="kpi-value">${fmt(s.devices)} <span class="kpi-rate">${onlineRate}</span></div>
-        <div class="kpi-sub"><span class="dot online"></span>在线 ${fmt(s.online)} &nbsp;<span class="dot offline"></span>离线 ${s.offline}</div>
-      </div>
-    </div>
-    <div class="kpi-card">
-      <div class="kpi-icon" style="background:rgba(129,199,132,.15);color:#81c784">👥</div>
-      <div class="kpi-body">
-        <div class="kpi-label">今日访客</div>
-        <div class="kpi-value">${fmt(s.visitorsToday)} <span class="kpi-unit">人次</span></div>
-        <div class="kpi-sub"><span class="${visitorCls}">${visitorTrend} ${Math.abs(+visitorChange)}%</span> 较昨日</div>
-      </div>
-    </div>
-    <div class="kpi-card">
-      <div class="kpi-icon" style="background:rgba(229,115,115,.15);color:#e57373">🚨</div>
-      <div class="kpi-body">
-        <div class="kpi-label">今日告警</div>
-        <div class="kpi-value kpi-danger">${s.alertsToday}</div>
-        <div class="kpi-sub">已处理 <span class="trend-up">${s.alertsResolved}</span> · 剩余 <span class="trend-down">${alertRemain}</span></div>
-      </div>
-    </div>
-    <div class="kpi-card">
-      <div class="kpi-icon" style="background:rgba(255,183,77,.15);color:#ffb74d">⚡</div>
-      <div class="kpi-body">
-        <div class="kpi-label">今日能耗</div>
-        <div class="kpi-value">${fmt(s.energyToday)} <span class="kpi-unit">kWh</span></div>
-        <div class="kpi-sub">昨日 ${fmt(s.energyYesterday)} kWh</div>
-      </div>
-    </div>
-    <div class="kpi-card">
-      <div class="kpi-icon" style="background:rgba(186,104,200,.15);color:#ba68c8">🅿️</div>
-      <div class="kpi-body">
-        <div class="kpi-label">车位占用率</div>
-        <div class="kpi-value">${pct(s.parkingUsed, s.parkingTotal)}</div>
-        <div class="kpi-sub">${fmt(s.parkingUsed)} / ${fmt(s.parkingTotal)} 个</div>
-      </div>
-    </div>
+    <div class="kpi-card"><div class="kpi-icon" style="background:rgba(79,195,247,.15);color:#4fc3f7">📡</div><div class="kpi-body"><div class="kpi-label">设备总数 / 在线率</div><div class="kpi-value">${fmt(s.devices)} <span class="kpi-rate">${pct(s.online, s.devices)}</span></div><div class="kpi-sub"><span class="dot online"></span>在线 ${fmt(s.online)} &nbsp;<span class="dot offline"></span>离线 ${s.offline}</div></div></div>
+    <div class="kpi-card"><div class="kpi-icon" style="background:rgba(129,199,132,.15);color:#81c784">👥</div><div class="kpi-body"><div class="kpi-label">今日访客</div><div class="kpi-value">${fmt(s.visitorsToday)} <span class="kpi-unit">人次</span></div><div class="kpi-sub"><span class="${vcls}">${vt} ${Math.abs(+vc)}%</span> 较昨日</div></div></div>
+    <div class="kpi-card"><div class="kpi-icon" style="background:rgba(229,115,115,.15);color:#e57373">🚨</div><div class="kpi-body"><div class="kpi-label">今日告警</div><div class="kpi-value kpi-danger">${s.alertsToday}</div><div class="kpi-sub">已处理 <span class="trend-up">${s.alertsResolved}</span> · 剩余 <span class="trend-down">${ar}</span></div></div></div>
+    <div class="kpi-card"><div class="kpi-icon" style="background:rgba(255,183,77,.15);color:#ffb74d">⚡</div><div class="kpi-body"><div class="kpi-label">今日能耗</div><div class="kpi-value">${fmt(s.energyToday)} <span class="kpi-unit">kWh</span></div><div class="kpi-sub">昨日 ${fmt(s.energyYesterday)} kWh</div></div></div>
+    <div class="kpi-card"><div class="kpi-icon" style="background:rgba(186,104,200,.15);color:#ba68c8">🅿️</div><div class="kpi-body"><div class="kpi-label">车位占用率</div><div class="kpi-value">${pct(s.parkingUsed, s.parkingTotal)}</div><div class="kpi-sub">${fmt(s.parkingUsed)} / ${fmt(s.parkingTotal)} 个</div></div></div>
   `
 }
+
+// ==================== 故障诊断 ====================
 
 function renderDiagnosisPanel() {
-  if (!store.diagnosis || store.diagnosis.length === 0) {
-    return `<div class="diagnosis-empty">✅ 当前所有区域运行正常，未检测到异常指标</div>`
-  }
-
-  const cards = store.diagnosis.map(d => {
-    const sevMap = { danger: '紧急', warn: '警告' }
-    const sevLabel = sevMap[d.severity] || d.severity
-    return `
-      <div class="diagnosis-card diag-${d.severity}">
-        <div class="diag-header">
-          <span class="diag-zone">📍 ${d.zone}</span>
-          <span class="diag-tag diag-tag-${d.severity}">${sevLabel}</span>
-        </div>
-        <div class="diag-body">
-          <div class="diag-metric">
-            <span class="diag-name">${d.metric}</span>
-            <span class="diag-value">${d.value} ${d.unit}</span>
-            <span class="diag-threshold">阈值: ${d.threshold}</span>
-          </div>
-          <div class="diag-cause">
-            <span class="diag-cause-label">🔍 诊断:</span> ${d.cause}
-          </div>
-          <div class="diag-suggestion">
-            <span class="diag-sug-label">💡 建议:</span> ${d.suggestion}
-          </div>
-        </div>
-      </div>
-    `
-  }).join('')
-
-  return `<div class="diagnosis-list">${cards}</div>`
+  if (!store.diagnosis.length) return `<div class="diagnosis-empty">✅ 当前所有区域运行正常，未检测到异常指标</div>`
+  return `<div class="diagnosis-list">${store.diagnosis.map(d => `
+    <div class="diagnosis-card diag-${d.severity}">
+      <div class="diag-header"><span class="diag-zone">📍 ${d.zone}</span><span class="diag-tag diag-tag-${d.severity}">${{danger:'紧急',warn:'警告'}[d.severity]||d.severity}</span></div>
+      <div class="diag-body">
+        <div class="diag-metric"><span class="diag-name">${d.metric}</span><span class="diag-value">${d.value} ${d.unit}</span><span class="diag-threshold">阈值: ${d.threshold}</span></div>
+        <div class="diag-cause"><span class="diag-cause-label">🔍 诊断:</span> ${d.cause}</div>
+        <div class="diag-suggestion"><span class="diag-sug-label">💡 建议:</span> ${d.suggestion}</div>
+      </div></div>`).join('')}</div>`
 }
 
-// ==================== 大屏仪表盘渲染 ====================
+// ==================== AI 问答引擎 ====================
+
+function generateSummary() {
+  const s = store.stats
+  const danger = store.env.filter(e => e.status === 'danger')
+  const warn = store.env.filter(e => e.status === 'warn')
+  const maxPM25 = store.env.reduce((a, b) => a.pm25 > b.pm25 ? a : b, store.env[0] || { zone: '--', pm25: 0 })
+  const t = store.energyTrend, le = t[t.length - 1], pe = t[t.length - 2]
+  const et = pe ? ((le.energy - pe.energy) / pe.energy * 100).toFixed(1) : '0'
+  let s2 = `📋 **实时概览**：园区共 ${fmt(s.devices)} 台设备，在线率 ${pct(s.online, s.devices)}。`
+  if (danger.length) s2 += `\n⚠️ ${danger.map(z => z.zone.split('·')[1]).join('、')} 处于**危险**状态。`
+  if (warn.length) s2 += `\n🔶 ${warn.map(z => z.zone.split('·')[1]).join('、')} 存在预警。`
+  s2 += `\n📊 PM2.5 最高：${maxPM25.zone.split('·')[1] || '--'}（${maxPM25.pm25} μg/m³）。`
+  s2 += `\n⚡ 能耗趋势：${+et >= 0 ? '↑' : '↓'} ${Math.abs(+et)}%。`
+  s2 += `\n🚨 待处理告警：${store.alerts.filter(a => a.status === 'pending').length} 条。`
+  return s2
+}
+
+function aiQuery(text) {
+  const q = text.trim(), s = store.stats
+  if (/危险|异常/.test(q)) {
+    const da = store.env.filter(e => e.status === 'danger'), wa = store.env.filter(e => e.status === 'warn')
+    let a = `📋 **异常区域分析**\n\n`
+    if (da.length) a += `🔴 危险：\n${da.map(e => `  • ${e.zone}：PM2.5=${e.pm25} CO₂=${e.co2} 温度=${e.temp}°C`).join('\n')}\n\n🔍 **归因**：${da[0].pm25 > 55 ? 'PM2.5 严重超标' : ''}${da[0].co2 > 850 ? 'CO₂ 浓度过高，通风可能失效' : '多项指标超标，可能存在级联故障'}\n`
+    if (wa.length) a += `\n🔶 预警：\n${wa.map(e => `  • ${e.zone}：${e.humidity > 65 ? '湿度过高' : e.temp > 28 ? '温度偏高' : e.pm25 > 40 ? 'PM2.5 偏高' : 'CO₂ 偏高'}`).join('\n')}\n`
+    if (!da.length && !wa.length) a += `✅ 所有区域运行正常。\n`
+    a += `\n💡 **建议**：优先处理 danger 区域，检查通风/制冷/除尘设备。`
+    return a
+  }
+  if (/能耗|用电/.test(q)) {
+    const pk = store.energyTrend.reduce((a, b) => a.energy > b.energy ? a : b), vl = store.energyTrend.reduce((a, b) => a.energy < b.energy ? a : b)
+    return `📋 **能耗分析**\n\n• 今日：${fmt(s.energyToday)} kWh（昨日 ${fmt(s.energyYesterday)} kWh）\n• 峰值：${pk.energy} kWh（${pk.time}）\n• 谷值：${vl.energy} kWh（${vl.time}）\n\n🔍 峰值与生产/办公活动高峰吻合。\n💡 可在谷时安排高能耗设备运行。`
+  }
+  if (/PM2\.5|pm25|空气质量/.test(q)) {
+    const w = store.env.reduce((a, b) => a.pm25 > b.pm25 ? a : b)
+    return `📋 **PM2.5 分析**\n\n• 最高：${w.zone}（${w.pm25} μg/m³）\n• 状态：${w.status === 'danger' ? '🔴 危险' : w.status === 'warn' ? '🔶 预警' : '✅ 正常'}\n\n🔍 ${w.pm25 > 55 ? '浓度严重超标' : w.pm25 > 40 ? '浓度偏高需关注' : '在安全范围内'}\n💡 检查空气净化设备，加强新风过滤。`
+  }
+  if (/温度|高温/.test(q)) {
+    const h = store.env.reduce((a, b) => a.temp > b.temp ? a : b)
+    return `📋 **温度分析**\n\n• 最高：${h.zone}（${h.temp}°C）\n• 状态：${h.temp > 30 ? '🔴 危险' : h.temp > 28 ? '🔶 预警' : '✅ 正常'}\n\n🔍 ${h.temp > 30 ? '制冷系统能力不足或散热异常' : '温度可控需持续关注'}\n💡 检查空调机组和散热设备。`
+  }
+  if (/设备|在线|离线/.test(q)) {
+    return `📋 **设备状态**\n\n• 总数：${fmt(s.devices)} · 在线：${fmt(s.online)}（${pct(s.online, s.devices)}）· 离线：${s.offline}\n\n类型分布：\n${store.deviceTypeStats.map(d => `  • ${d.name}：${d.online}/${d.total}（${pct(d.online, d.total)}）`).join('\n')}\n\n💡 离线设备需排查网络和供电。`
+  }
+  if (/告警/.test(q)) {
+    const lv = {}; store.alerts.forEach(a => lv[a.level] = (lv[a.level] || 0) + 1)
+    return `📋 **告警统计**\n\n• 紧急：${lv.danger || 0} · 警告：${lv.warn || 0} · 提示：${lv.info || 0}\n• 待处理：${store.alerts.filter(a => a.status === 'pending').length}\n\n最近：\n${store.alerts.slice(0, 3).map(a => `  • ${a.time} [${a.label}] ${a.device}`).join('\n')}\n\n💡 优先处理紧急告警。`
+  }
+  if (/JSON|原始|导出/.test(q)) return '```json\n' + JSON.stringify({ stats: store.stats, env: store.env, deviceTypeStats: store.deviceTypeStats, diagnosis: store.diagnosis, alerts: store.alerts.slice(0, 10) }, null, 2) + '\n```'
+  return generateSummary() + `\n\n💡 可提问："哪个区域最危险"、"能耗趋势"、"PM2.5最高"、"设备在线率"、"告警汇总"、"导出JSON"。`
+}
+
+// ==================== 园区 2D 地图 ====================
+
+function renderMapPanel() {
+  const si = { good: '✅', warn: '🔶', danger: '🔴' }
+  return `<div class="zone-map">${store.env.map(e => `
+    <div class="zone-card zone-${e.status}" onclick="window.__showZoneDetail('${e.zone.replace(/'/g, "\\'")}')">
+      <div class="zone-card-status">${si[e.status] || '✅'}</div>
+      <div class="zone-card-name">${e.zone.split('·')[1] || e.zone}</div>
+      <div class="zone-card-metrics"><span>🌡 ${e.temp}°C</span><span>💧 ${e.humidity}%</span><span>🫁 ${e.pm25}</span><span>💨 ${e.co2}</span></div>
+    </div>`).join('')}</div>`
+}
+
+function showZoneDetail(zoneName) {
+  const z = store.env.find(e => e.zone === zoneName); if (!z) return
+  const ra = store.alerts.filter(a => a.location === zoneName || a.location.includes(zoneName.split('·')[1] || ''))
+  const di = store.diagnosis.filter(d => d.zone === zoneName)
+  const pmM = Math.max(...store.env.map(e => e.pm25), 1), coM = Math.max(...store.env.map(e => e.co2), 1)
+  const h = `
+    <div class="zone-overlay" onclick="this.remove()"></div>
+    <div class="zone-modal"><div class="zone-modal-header"><h3>📍 ${zoneName}</h3><span class="zone-modal-status tag-${z.status==='danger'?'danger':z.status==='warn'?'warn':'success'}">${z.status==='danger'?'⚠️ 危险':z.status==='warn'?'🔶 预警':'✅ 正常'}</span><button class="zone-modal-close" onclick="this.closest('.zone-modal').remove();document.querySelector('.zone-overlay').remove()">✕</button></div>
+    <div class="zone-modal-body">
+      <div class="zone-gauges">
+        <div class="zone-gauge"><span class="gauge-label">🌡 温度</span><div class="gauge-bar"><div class="gauge-fill gauge-temp" style="width:${(z.temp/40*100).toFixed(0)}%"></div></div><span class="gauge-val">${z.temp}°C</span></div>
+        <div class="zone-gauge"><span class="gauge-label">💧 湿度</span><div class="gauge-bar"><div class="gauge-fill gauge-hum" style="width:${z.humidity}%"></div></div><span class="gauge-val">${z.humidity}%</span></div>
+        <div class="zone-gauge"><span class="gauge-label">🫁 PM2.5</span><div class="gauge-bar"><div class="gauge-fill gauge-pm25" style="width:${(z.pm25/pmM*100).toFixed(0)}%"></div></div><span class="gauge-val">${z.pm25} μg/m³</span></div>
+        <div class="zone-gauge"><span class="gauge-label">💨 CO₂</span><div class="gauge-bar"><div class="gauge-fill gauge-co2" style="width:${(z.co2/coM*100).toFixed(0)}%"></div></div><span class="gauge-val">${z.co2} ppm</span></div>
+      </div>
+      ${di.length ? `<div class="zone-section"><div class="zone-section-title">🩺 诊断</div>${di.map(d => `<div class="zone-diag-item diag-${d.severity}">${d.metric} ${d.value}${d.unit} → ${d.suggestion}</div>`).join('')}</div>` : ''}
+      ${ra.length ? `<div class="zone-section"><div class="zone-section-title">🚨 告警（${ra.length}）</div>${ra.slice(0,5).map(a => `<div class="zone-alert-item"><span class="tag tag-${a.level}">${a.label}</span> ${a.time} ${a.desc}</div>`).join('')}</div>` : ''}
+    </div></div>`
+  document.querySelector('.zone-modal')?.remove(); document.querySelector('.zone-overlay')?.remove()
+  document.body.insertAdjacentHTML('beforeend', h)
+}
+window.__showZoneDetail = showZoneDetail
+
+// ==================== 声光告警 ====================
+
+function renderMarquee() {
+  const pd = store.alerts.filter(a => a.status === 'pending' && a.level === 'danger')
+  if (!pd.length) return '<div class="marquee-bar marquee-ok">✅ 系统运行正常，无紧急告警</div>'
+  const text = pd.map(a => `🚨 ${a.time} | ${a.device} | ${a.location} | ${a.desc}`).join('&nbsp;&nbsp;&nbsp;⏺&nbsp;&nbsp;&nbsp;')
+  return `<div class="marquee-bar marquee-danger"><div class="marquee-scroll"><span>${text}</span><span>${text}</span></div></div>`
+}
+
+function playAlertSound() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)()
+    ;[0, 0.22, 0.44].forEach((t, i) => { const o = ctx.createOscillator(), g = ctx.createGain(); o.type = 'square'; o.frequency.value = 880; g.gain.setValueAtTime(0.15, ctx.currentTime + t); g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + t + (i < 2 ? 0.12 : 0.15)); o.connect(g); g.connect(ctx.destination); o.start(ctx.currentTime + t); o.stop(ctx.currentTime + t + 0.18) })
+  } catch (_) {}
+}
+
+function showAlertToast(a) {
+  const t = document.createElement('div'); t.className = `alert-toast toast-${a.level}`
+  t.innerHTML = `<div class="toast-icon">${a.level === 'danger' ? '🔴' : '🟡'}</div><div class="toast-body"><div class="toast-title">${a.label}告警</div><div class="toast-text">${a.device} — ${a.desc}</div></div><button class="toast-close" onclick="this.parentElement.remove()">✕</button>`
+  document.body.appendChild(t); setTimeout(() => t.parentElement && t.remove(), 6000)
+}
+
+function checkAlertBursts() {
+  const nd = store.alerts.filter(a => a.status === 'pending' && a.level === 'danger' && !alertedIds.has(a.id))
+  if (nd.length) { playAlertSound(); nd.forEach(a => { alertedIds.add(a.id); showAlertToast(a) }); if (alertedIds.size > 100) [...alertedIds].slice(0, alertedIds.size - 80).forEach(id => alertedIds.delete(id)) }
+  const ka = document.querySelector('.kpi-card:nth-child(3)')
+  if (ka) ka.classList.toggle('kpi-pulse', store.alerts.filter(a => a.status === 'pending' && a.level === 'danger').length > 0)
+}
+
+// ==================== 智能缩放 ====================
+
+let scaleObserver = null
+function initAutoScale() {
+  const sc = document.querySelector('.dashboard-screen'); if (!sc) return
+  if (scaleObserver) scaleObserver.disconnect()
+  scaleObserver = new ResizeObserver(() => {
+    const p = sc.parentElement; if (!p) return
+    const s = Math.min(p.clientWidth / 1920, p.clientHeight / 1080, 1)
+    sc.style.transform = `scale(${s})`; sc.style.transformOrigin = 'top left'
+    sc.style.width = '1920px'; sc.style.height = '1080px'
+    sc.style.marginBottom = `${-(1080 - 1080 * s)}px`
+  })
+  scaleObserver.observe(sc.parentElement)
+}
+
+// ==================== AI 面板 ====================
+
+function renderAIPanel() {
+  return `<div class="ai-panel" id="aiPanel">
+    <div class="ai-panel-header"><span class="ai-panel-title">🤖 AI 智能分析</span><button class="ai-panel-toggle" id="aiPanelToggle" title="折叠">◀</button></div>
+    <div class="ai-panel-body" id="aiPanelBody"><div class="ai-summary" id="aiSummary">${generateSummary().replace(/\n/g, '<br>')}</div><div class="ai-chat" id="aiChat"></div></div>
+    <div class="ai-panel-input"><input type="text" id="aiInput" placeholder="提问：哪个区域最危险？" /><button id="aiSend">发送</button></div>
+  </div>`
+}
+
+function initAIPanel() {
+  const send = () => { const t = $('#aiInput').value.trim(); if (!t) return; const a = aiQuery(t); const c = $('#aiChat'); c.innerHTML += `<div class="ai-msg ai-msg-user">🧑 ${t}</div><div class="ai-msg ai-msg-bot">${a.replace(/\n/g, '<br>')}</div>`; c.scrollTop = c.scrollHeight; $('#aiInput').value = '' }
+  $('#aiSend').addEventListener('click', send)
+  $('#aiInput').addEventListener('keydown', e => { if (e.key === 'Enter') send() })
+  $('#aiPanelToggle').addEventListener('click', () => { const p = $('#aiPanel'), b = $('#aiPanelToggle'); p.classList.toggle('ai-collapsed'); b.textContent = p.classList.contains('ai-collapsed') ? '▶' : '◀'; setTimeout(() => Object.values(chartInstances).forEach(c => c?.resize()), 350) })
+}
+
+// ==================== 大屏渲染 ====================
 
 function renderDashboard() {
-  return `
-    <div class="dashboard-screen">
-      <!-- KPI 指标行 -->
-      <div class="kpi-row" id="kpiRow">${renderKpiCards()}</div>
-
-      <!-- 图表区：折线图 + 饼图 -->
-      <div class="chart-row">
-        <div class="chart-box chart-box-large">
-          <div class="chart-header">
-            <span class="chart-title">📈 24h 多维趋势监控</span>
-            <span class="chart-subtitle">能耗 · 温度 · 湿度 | 实时刷新</span>
-          </div>
-          <div class="chart-body" id="chartLine"></div>
-        </div>
-        <div class="chart-box chart-box-small">
-          <div class="chart-header">
-            <span class="chart-title">🍩 设备类型占比分布</span>
-            <span class="chart-subtitle">按设备类别统计</span>
-          </div>
-          <div class="chart-body" id="chartPie"></div>
-        </div>
+  return `<div class="dashboard-screen">
+    <div id="marqueeRow">${renderMarquee()}</div>
+    <div class="kpi-row" id="kpiRow">${renderKpiCards()}</div>
+    <div class="dashboard-main">
+      <div class="dashboard-left">
+        <div class="chart-row"><div class="chart-box"><div class="chart-header"><span class="chart-title">📈 24h 多维趋势监控</span><span class="chart-subtitle">能耗 · 温度 · 湿度 | 实时刷新</span></div><div class="chart-body" id="chartLine"></div></div><div class="chart-box"><div class="chart-header"><span class="chart-title">🍩 设备类型占比分布</span><span class="chart-subtitle">按设备类别统计</span></div><div class="chart-body" id="chartPie"></div></div></div>
+        <div class="chart-row map-heat-row"><div class="chart-box"><div class="chart-header"><span class="chart-title">🏗️ 园区楼宇分布</span><span class="chart-subtitle">点击楼宇查看详情</span></div><div class="chart-body" id="zoneMapContainer">${renderMapPanel()}</div></div><div class="chart-box"><div class="chart-header"><span class="chart-title">🔥 环境空间密度热力图</span><span class="chart-subtitle">各区域 PM2.5 · CO₂ · 温度 · 湿度</span></div><div class="chart-body chart-body-heatmap" id="chartHeatmap"></div></div></div>
+        <div class="chart-row"><div class="chart-box chart-box-full"><div class="chart-header"><span class="chart-title">🩺 智能故障诊断</span><span class="chart-subtitle">基于实时传感器的异常检测与诊断建议</span>${store.diagnosis.length ? `<span class="diag-count diag-count-badge">${store.diagnosis.length} 项异常</span>` : '<span class="diag-count diag-count-ok">全部正常</span>'}</div><div class="chart-body" id="diagnosisPanel">${renderDiagnosisPanel()}</div></div></div>
       </div>
-
-      <!-- 热力图 -->
-      <div class="chart-row">
-        <div class="chart-box chart-box-full">
-          <div class="chart-header">
-            <span class="chart-title">🔥 园区环境空间密度热力图</span>
-            <span class="chart-subtitle">各区域 PM2.5 · CO₂ · 温度 · 湿度 归一化分布</span>
-          </div>
-          <div class="chart-body chart-body-heatmap" id="chartHeatmap"></div>
-        </div>
-      </div>
-
-      <!-- 智能故障诊断 -->
-      <div class="chart-row">
-        <div class="chart-box chart-box-full">
-          <div class="chart-header">
-            <span class="chart-title">🩺 智能故障诊断</span>
-            <span class="chart-subtitle">基于实时传感器数据的异常检测与诊断建议</span>
-            ${store.diagnosis.length > 0 ? `<span class="diag-count diag-count-badge">${store.diagnosis.length} 项异常</span>` : '<span class="diag-count diag-count-ok">全部正常</span>'}
-          </div>
-          <div class="chart-body" id="diagnosisPanel">${renderDiagnosisPanel()}</div>
-        </div>
-      </div>
+      <div class="dashboard-right" id="aiPanelContainer">${renderAIPanel()}</div>
     </div>
-  `
+  </div>`
 }
 
-/** 大屏初始化：渲染 HTML 后创建 ECharts 实例 */
-function initDashboardCharts() {
-  // 先销毁旧实例
+function initDashboard() {
   disposeAllCharts()
-
-  // 等待 DOM 就绪后初始化图表
   requestAnimationFrame(() => {
     renderLineChart('chartLine', store.energyTrend)
     renderPieChart('chartPie', store.deviceTypeStats)
     renderHeatmap('chartHeatmap', store.env)
+    initAIPanel()
+    initAutoScale()
   })
 }
 
-// ==================== 非大屏页面渲染（保持原有功能） ====================
-
-function renderDevices() {
-  const rows = store.devices.map(d => {
-    const st = d.status === 'online' ? 'tag-success' : d.status === 'alarm' ? 'tag-danger' : 'tag-warn'
-    const stLabel = d.status === 'online' ? '在线' : d.status === 'alarm' ? '告警' : '离线'
-    return `<tr>
-      <td>${d.id}</td><td>${d.name}</td><td>${d.type}</td><td>${d.location}</td>
-      <td><span class="tag ${st}">${stLabel}</span></td>
-      <td>${d.ip}</td><td>${d.updated}</td>
-    </tr>`
-  }).join('')
-  return `<div class="panel" style="margin-bottom:0">
-    <div class="panel-header">设备清单 <span class="header-tag">${store.devices.length} 台</span></div>
-    <div class="panel-body" style="padding:0">
-      <table><thead><tr><th>编号</th><th>名称</th><th>类型</th><th>位置</th><th>状态</th><th>IP</th><th>更新时间</th></tr></thead><tbody>${rows}</tbody></table>
-    </div></div>`
+function refreshDashboard() {
+  renderLineChart('chartLine', store.energyTrend)
+  renderPieChart('chartPie', store.deviceTypeStats)
+  renderHeatmap('chartHeatmap', store.env)
+  const kpi = $('#kpiRow'); if (kpi) kpi.innerHTML = renderKpiCards()
+  const diag = $('#diagnosisPanel'); if (diag) diag.innerHTML = renderDiagnosisPanel()
+  const marq = $('#marqueeRow'); if (marq) marq.innerHTML = renderMarquee()
+  const map = $('#zoneMapContainer'); if (map) map.innerHTML = renderMapPanel()
+  const sum = $('#aiSummary'); if (sum) sum.innerHTML = generateSummary().replace(/\n/g, '<br>')
+  checkAlertBursts()
 }
-
-function renderSecurity() {
-  const grid = store.cameras.map(c => `
-    <div class="cam-card">
-      <div class="cam-preview">📹</div>
-      <div class="cam-info">
-        <div class="cam-name">${c.name}</div>
-        <div class="cam-loc">${c.location}</div>
-        <span class="cam-status">● 在线</span>
-      </div>
-    </div>
-  `).join('')
-  return `<div class="cam-grid">${grid}</div>`
-}
-
-function renderEnergy() {
-  // 能耗页面复用折线图（独立实例）
-  return `
-    <div class="stat-row">
-      <div class="stat-card"><div class="label">今日用电</div><div class="value">${fmt(store.stats.energyToday)}<span class="unit">kWh</span></div><div class="sub">实时监测中</div></div>
-      <div class="stat-card"><div class="label">昨日用电</div><div class="value">${fmt(store.stats.energyYesterday)}<span class="unit">kWh</span></div></div>
-      <div class="stat-card"><div class="label">本月累计</div><div class="value">${fmt(142500)}<span class="unit">kWh</span></div></div>
-      <div class="stat-card"><div class="label">光伏发电</div><div class="value">${fmt(2180)}<span class="unit">kWh</span></div></div>
-    </div>
-    <div class="panel">
-      <div class="panel-header">24h 能耗趋势</div>
-      <div class="panel-body"><div class="chart-body" id="chartEnergyPage" style="height:280px"></div></div>
-    </div>
-  `
-}
-
-function renderParking() {
-  const lots = store.parkingLots.map(l => {
-    const rate = (l.used / l.total * 100).toFixed(0)
-    const cls = rate > 85 ? 'danger' : rate > 70 ? 'warn' : 'success'
-    return `
-      <div class="panel">
-        <div class="panel-header">${l.name}</div>
-        <div class="panel-body">
-          <div class="parking-row">
-            <div class="parking-nums">
-              <span class="parking-used">${l.used}</span><span class="parking-sep">/</span><span class="parking-total">${l.total}</span>
-              <span class="tag tag-${cls}" style="margin-left:10px">${rate}%</span>
-            </div>
-            <div class="progress-bar"><div class="progress-fill progress-${cls}" style="width:${rate}%"></div></div>
-            <div class="parking-free">剩余 ${l.total - l.used} 个车位</div>
-          </div>
-        </div>
-      </div>`
-  }).join('')
-  return `<div style="max-width:640px">${lots}</div>`
-}
-
-function renderAlerts() {
-  const rows = store.alerts.map(a => {
-    const stCls = a.status === 'pending' ? 'tag-danger' : a.status === 'processing' ? 'tag-warn' : 'tag-success'
-    const stLabel = a.status === 'pending' ? '待处理' : a.status === 'processing' ? '处理中' : '已解决'
-    return `<tr>
-      <td>${a.time}</td><td>${a.device}</td><td>${a.location}</td>
-      <td><span class="tag tag-${a.level}">${a.label}</span></td><td>${a.desc}</td>
-      <td><span class="tag ${stCls}">${stLabel}</span></td>
-    </tr>`
-  }).join('')
-  return `<div class="panel" style="margin-bottom:0">
-    <div class="panel-header">告警列表 <span class="header-tag">${store.alerts.length} 条</span></div>
-    <div class="panel-body" style="padding:0">
-      <table><thead><tr><th>时间</th><th>设备</th><th>位置</th><th>级别</th><th>描述</th><th>状态</th></tr></thead><tbody>${rows}</tbody></table>
-    </div></div>`
-}
-
-// ==================== 页面定义 ====================
-
-const pageDefs = {
-  dashboard: { title: '📊 监控大屏', render: renderDashboard, onShow: initDashboardCharts, onHide: disposeAllCharts },
-  devices:    { title: '🔌 设备管理', render: renderDevices },
-  security:   { title: '🛡️ 安防监控', render: renderSecurity },
-  energy:     { title: '⚡ 能耗管理', render: renderEnergy, onShow() { requestAnimationFrame(() => renderLineChart('chartEnergyPage', store.energyTrend)) }, onHide() { disposeChart('chartEnergyPage') } },
-  parking:    { title: '🅿️ 停车管理', render: renderParking },
-  alerts:     { title: '🚨 告警中心', render: renderAlerts },
-}
-
-// ==================== Tab 管理 ====================
-
-const tabBar = $('#tabBar')
-const tabContent = $('#tabContent')
-const tabs = {}
-let activeTab = null
-
-function createTab(page) {
-  const def = pageDefs[page]
-  if (!def) return
-  if (tabs[page]) return switchTab(page)
-
-  const panel = document.createElement('div')
-  panel.className = 'tab-panel'
-  panel.innerHTML = def.render()
-  tabContent.appendChild(panel)
-
-  const closable = page !== 'dashboard'
-  const tabEl = document.createElement('span')
-  tabEl.className = 'tab-item'
-  tabEl.innerHTML = `${def.title}${closable ? '<span class="tab-close">✕</span>' : ''}`
-  tabEl.addEventListener('click', (e) => {
-    if (e.target.classList.contains('tab-close')) return
-    switchTab(page)
-  })
-  if (closable) {
-    tabEl.querySelector('.tab-close').addEventListener('click', (e) => {
-      e.stopPropagation()
-      closeTab(page)
-    })
-  }
-  tabBar.appendChild(tabEl)
-  tabs[page] = { el: panel, tabEl, closable, def }
-  switchTab(page)
-}
-
-function switchTab(page) {
-  if (activeTab === page) return
-
-  // 隐藏旧页面
-  if (activeTab && tabs[activeTab]) {
-    tabs[activeTab].el.classList.remove('active')
-    tabs[activeTab].tabEl.classList.remove('active')
-    if (tabs[activeTab].def.onHide) tabs[activeTab].def.onHide()
-  }
-
-  activeTab = page
-  tabs[page].el.classList.add('active')
-  tabs[page].tabEl.classList.add('active')
-  if (tabs[page].def.onShow) tabs[page].def.onShow()
-
-  $$('.nav-item').forEach(el => el.classList.toggle('active', el.dataset.page === page))
-  document.title = pageDefs[page].title + ' - Park OS'
-  window.location.hash = page
-  updateAlertBadge()
-}
-
-function closeTab(page) {
-  if (!tabs[page] || !tabs[page].closable) return
-  if (activeTab === page) {
-    if (tabs[page].def.onHide) tabs[page].def.onHide()
-    const keys = Object.keys(tabs)
-    const i = keys.indexOf(page)
-    const next = keys[i + 1] || keys[i - 1]
-    if (next) switchTab(next)
-  }
-  tabs[page].el.remove()
-  tabs[page].tabEl.remove()
-  delete tabs[page]
-}
-
-// ==================== 告警角标 ====================
-
-function updateAlertBadge() {
-  const pending = store.alerts.filter(a => a.status === 'pending').length
-  const navAlert = $('[data-page="alerts"]')
-  if (pending > 0) {
-    navAlert.style.position = 'relative'
-    if (!navAlert.querySelector('.badge')) {
-      const b = document.createElement('span')
-      b.className = 'badge'
-      navAlert.appendChild(b)
-    }
-    navAlert.querySelector('.badge').textContent = pending
-  } else {
-    const b = navAlert.querySelector('.badge')
-    if (b) b.remove()
-  }
-}
-
-// ==================== 侧边栏 ====================
-
-$$('.nav-item').forEach(el => el.addEventListener('click', (e) => {
-  e.preventDefault()
-  createTab(el.dataset.page)
-  closeSidebar()
-}))
-
-function openSidebar() {
-  $('#sidebar').classList.add('open')
-  $('#sidebarOverlay').classList.add('show')
-}
-function closeSidebar() {
-  $('#sidebar').classList.remove('open')
-  $('#sidebarOverlay').classList.remove('show')
-}
-
-$('#sidebarToggle').addEventListener('click', () => {
-  $('#sidebar').classList.contains('open') ? closeSidebar() : openSidebar()
-})
-$('#sidebarOverlay').addEventListener('click', closeSidebar)
-
-// ==================== 时钟 ====================
-
-function tick() {
-  $('#headerTime').textContent = new Date().toLocaleString('zh-CN', { hour12: false })
-}
-tick()
-setInterval(tick, 1000)
-
-// ==================== 窗口 resize → ECharts 自适应 ====================
-
-window.addEventListener('resize', () => {
-  for (const key of Object.keys(chartInstances)) {
-    chartInstances[key]?.resize()
-  }
-})
 
 // ==================== 启动 ====================
 
-// 1. 连接 WebSocket
+function tick() { $('#headerTime').textContent = new Date().toLocaleString('zh-CN', { hour12: false }) }
+tick(); setInterval(tick, 1000)
+window.addEventListener('resize', () => Object.values(chartInstances).forEach(c => c?.resize()))
 connectWebSocket()
-
-// 2. 初始页面
-updateAlertBadge()
-const hash = window.location.hash.slice(1) || 'dashboard'
-createTab(hash)
-
-window.addEventListener('hashchange', () => {
-  const page = window.location.hash.slice(1) || 'dashboard'
-  createTab(page)
-})
+$('#dashboard').innerHTML = renderDashboard()
+initDashboard()

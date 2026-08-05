@@ -3,39 +3,17 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>智慧园区演示系统</title>
+  <title>Park OS — 智慧园区监控大屏</title>
   <link rel="stylesheet" href="/src/style.css" />
   <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
 </head>
 <body>
-  <div id="app">
-    <header class="header">
-      <button class="sidebar-toggle" id="sidebarToggle" title="菜单">☰</button>
-      <h1 class="logo"><mark>Park</mark> OS</h1>
-      <span class="ws-indicator ws-disconnected" id="wsIndicator" title="WebSocket 未连接"></span>
-      <span class="header-time" id="headerTime">--</span>
-    </header>
-
-    <div class="layout">
-      <div class="sidebar-overlay" id="sidebarOverlay"></div>
-      <aside class="sidebar" id="sidebar">
-        <nav class="nav">
-          <a class="nav-item active" data-page="dashboard" href="#dashboard">📊 园区概览</a>
-          <a class="nav-item" data-page="devices" href="#devices">🔌 设备管理</a>
-          <a class="nav-item" data-page="security" href="#security">🛡️ 安防监控</a>
-          <a class="nav-item" data-page="energy" href="#energy">⚡ 能耗管理</a>
-          <a class="nav-item" data-page="parking" href="#parking">🅿️ 停车管理</a>
-          <a class="nav-item" data-page="alerts" href="#alerts">🚨 告警中心</a>
-        </nav>
-      </aside>
-
-      <div class="main-area">
-        <div class="tab-bar" id="tabBar"></div>
-        <div class="tab-content" id="tabContent"></div>
-      </div>
-    </div>
-  </div>
-
+  <header class="header">
+    <h1 class="logo"><mark>Park</mark> OS</h1>
+    <span class="ws-indicator ws-disconnected" id="wsIndicator" title="WebSocket 未连接"></span>
+    <span class="header-time" id="headerTime">--</span>
+  </header>
+  <main id="dashboard"></main>
   <script type="module" src="/src/main.js"></script>
 </body>
 </html>
